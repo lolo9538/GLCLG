@@ -1,19 +1,19 @@
 <#-----------------------------------------------------------------------------------------------------------------------------
-    Galaxy Logs Collector Version 4.02
+    Galaxy Logs Collector Version 1.1.1
     Script, Knowledge & Bugs, Eran Binyamin Zeitoun (ezeitoun@dalet.com)
 -------------------------------------------------------------------------------------------------------------------------------#>
 
 Add-Type -AssemblyName System.Windows.Forms
 
 $strComputerName = $env:COMPUTERNAME                                                        #Get Computer Name from Environment Variables
-$strCurrentTime = (get-date).ToString("ddmmyyyy_hhmmss")                                    #Current Time/Date as String
+$strCurrentTime = (get-date).ToString("yyyyMMdd_HHmmss")                                    #Current Time/Date as String
 $strProcessName = "DaletGalaxy"                                                             #Process Name
 $strToolsPath = "C:\GLC\"                                                                   #3rd party tools path
-$strStoragePath = "C:\GLC\Files\"                                                           #Compressed archive targtet path
+$strStoragePath = "C:\GLC\Files\"                                                           #Compressed archive target path
 $strWorkPath = $env:TEMP + "\GLC\"                                                          #Temp files path
 $StrServersLogsXML = "\\yourShare\LogsToCollect.xml"                                        #Galaxy site XML file
-$BolClose = $false                                                                           #Display Save and Close button
-$strDestination = ($strStoragePath + $strCurrentTime + "_" + $strComputerName + ".zip")     #Compressed archive file name]
+$BolClose = $true                                                                           #Display Save and Close button
+$strDestination = ($strStoragePath + $strCurrentTime + "_" + $strComputerName + ".zip")     #Compressed archive file name
 $ScriptPath = $MyInvocation.MyCommand.Path                                                  #Script source path
 $IntHours = 4                                                                               #Logs Collection Range (Hours)
 
@@ -164,7 +164,7 @@ ProgBar "Collecting Galaxy Client Logs" 65
 $DaletLogs = Get-ChildItem "C:\ProgramData\Dalet\DaletLogs\" -Recurse
 foreach ($item in $DaletLogs) {
     if ($item.PSIsContainer -eq $false) {
-        $NewfileName = $strWorkPath + $strCurrentTime + $item.Name + ".Log"
+        $NewfileName = $strWorkPath + $strCurrentTime + $item.Name
         Copy-Item $item.FullName -Destination $NewFileName 
     }
 }
@@ -186,21 +186,23 @@ if ([System.IO.File]::Exists($StrServersLogsXML)) {
             Write-Host "dealing with agent $agent"     
             $path = "\\$hostName\c$\ProgramData\Dalet\DaletLogs\$siteName-$agent@$hostAlias"
             $serverLogs = Get-ChildItem "$path" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-            $NewfileName = $strWorkPath + $strCurrentTime + $serverLogs.Name + ".Log"
+            $NewfileName = $strWorkPath + $strCurrentTime + $serverLogs.Name
             Copy-Item $serverLogs.FullName -Destination $NewFileName
         }
     }
 }
 
-<# Gather Windows Enviroment Varibales #>
+<# Gather Windows Environment Variables #>
 ProgBar "Collecting Environment Settings" 85
-$TempPath = $strWorkPath + $strCurrentTime + "_Enviroment.txt"
+$TempPath = $strWorkPath + $strCurrentTime + "_Environment.txt"
 Get-ChildItem env: | Out-File $TempPath
  
 <# Compress all files into a single Zip #>
 ProgBar "Compressing Everything" 90
-Compress-Archive -Path $strWorkPath -DestinationPath $strDestination 
-
+$compressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
+$includeBaseDirectory = $false
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory("$strWorkPath","$strDestination",$compressionLevel,$includeBaseDirectory)
 ProgBar "Galaxy Logs Collection Completed!" 100
 
 <# Clean Temp Directory #>
