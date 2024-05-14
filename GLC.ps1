@@ -1,5 +1,5 @@
 <#-----------------------------------------------------------------------------------------------------------------------------
-    Galaxy Logs Collector Version 1.1.0
+    Galaxy Logs Collector Version 1.1.1
     Script, Knowledge & Bugs, Eran Binyamin Zeitoun (ezeitoun@dalet.com)
 -------------------------------------------------------------------------------------------------------------------------------#>
 
@@ -137,8 +137,19 @@ $form.Show()
 <# Gathering Running Processes #>
 ProgBar "Gathering Running Processes" 45
 $TempPath = $strWorkPath + $strCurrentTime + "_Processes.txt"
-Get-Process | Format-Table -Property ProcessName, CPU, TotalProcessorTime, PagedMemorySize, VirtualMemorySize, NonpagedSystemMemorySize, PagedSystemMemorySize, PeakPagedMemorySize, PeakWorkingSet, PeakVirtualMemorySizeTotalProcessorTime, StartTime, FileVersion, Threads | Out-File -FilePath $TempPath
-    
+Get-Process | Sort-Object -Property WorkingSet -Descending | Format-Table -Property ProcessName, CPU, @{Name='RAM (GB)';Expression={[math]::Round($_.WorkingSet / 1GB, 2)}}, Handles, TotalProcessorTime, PagedMemorySize, VirtualMemorySize, VirtualMemorySize64, NonpagedSystemMemorySize, PagedSystemMemorySize, PeakPagedMemorySize, PeakWorkingSet, PeakVirtualMemorySizeTotalProcessorTime, StartTime, FileVersion, Threads | Out-String -Width 2048 | Out-File -FilePath $TempPath
+
+<# Total RAM usage #>
+
+# Calculate total RAM in use in bytes
+$totalRAMInUseBytes = (Get-Process | Measure-Object -Property WorkingSet -Sum).Sum
+# Convert total RAM in use to GB
+$totalRAMInUseGB = [math]::Round($totalRAMInUseBytes / 1GB, 2)
+
+$totalPhysicalMemory = Get-CimInstance Win32_PhysicalMemory | Measure-Object -Property capacity -Sum
+$totalPhysicalMemoryGB = [math]::Round($totalPhysicalMemory.Sum / 1GB, 2)
+
+Add-Content -Path $TempPath -Value "`nTotal RAM usage(GB): $totalRAMInUseGB out of $totalPhysicalMemoryGB"
 
 <# Collecting System & Applications Event Logs #>
 ProgBar "Collecting System & Applications Event Logs" 55
@@ -150,7 +161,7 @@ Invoke-Expression $Command
 
 <# Collect Galaxy Client Logs for the past x hours #>
 ProgBar "Collecting Galaxy Client Logs" 65
-$DaletLogs = Get-ChildItem "C:\ProgramData\Dalet\DaletLogs\" -Recurse | Where-Object { $_.LastWriteTime -gt (Get-Date).AddHours(-$IntHours) }
+$DaletLogs = Get-ChildItem "C:\ProgramData\Dalet\DaletLogs\" -Recurse
 foreach ($item in $DaletLogs) {
     if ($item.PSIsContainer -eq $false) {
         $NewfileName = $strWorkPath + $strCurrentTime + $item.Name
@@ -192,7 +203,6 @@ $compressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
 $includeBaseDirectory = $false
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [System.IO.Compression.ZipFile]::CreateFromDirectory("$strWorkPath","$strDestination",$compressionLevel,$includeBaseDirectory)
-
 ProgBar "Galaxy Logs Collection Completed!" 100
 
 <# Clean Temp Directory #>
